@@ -113,11 +113,10 @@ class Main:
 
             #* save weights
             if epoch % 10 == 0:
-                weights_path = self.save_weights(bench.model, epoch)
+                weights_path = self.save_checkpoint(bench.model, epoch)
                 print(f'{header}Saved "{weights_path}"')
 
             scheduler.step(train_metrics['loss'])
-            # scheduler.step()
             print()
 
     def arg_predict(self, parser):

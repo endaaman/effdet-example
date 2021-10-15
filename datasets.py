@@ -11,7 +11,7 @@ np.random.seed(42)
 
 
 class CircleDataset(Dataset):
-    def __init__(self, use_yxyx=True, image_size=512, bg=(0, 0, 0), fg=(255, 0, 0)):
+    def __init__(self, use_yxyx=True, image_size=512, bg=(0, 0, 0), fg=(255, 0, 0), normalized=True):
         self.use_yxyx = use_yxyx
         self.bg = bg
         self.fg = fg
@@ -19,7 +19,7 @@ class CircleDataset(Dataset):
 
         # 適当なaugmentaion
         self.albu = A.Compose([
-            A.RandomResizedCrop(width=self.image_size, height=self.image_size, scale=[0.7, 1.0]),
+            A.RandomResizedCrop(width=self.image_size, height=self.image_size, scale=[0.8, 1.0]),
             A.GaussNoise(p=0.2),
             A.OneOf([
                 A.MotionBlur(p=.2),
@@ -33,20 +33,20 @@ class CircleDataset(Dataset):
                 A.RandomBrightnessContrast(),
             ], p=0.3),
             A.HueSaturationValue(p=0.3),
-            A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]),
+            # 可視化するとき正規化されるとnoisyなのでトグれるようにする
+            A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]) if normalized else None,
             ToTensorV2(),
-            # label_fieldsで与えたkwargsがラベルとして扱われる
         ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
 
     def __len__(self):
-        return 1000 # 1epochあたりの枚数。適当に決めた
+        return 1000 # 1epochあたりの枚数。自動生成なので適当
 
     def __getitem__(self, idx):
         img = Image.new('RGB', (512, 512), self.bg)
 
         size = np.random.randint(0, 256)
-        left = np.random.randint(0, 256) # left
-        top = np.random.randint(0, 256) # top
+        left = np.random.randint(0, 256)
+        top = np.random.randint(0, 256)
 
         right = left + size
         bottom = top + size
@@ -55,12 +55,12 @@ class CircleDataset(Dataset):
 
         # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
         bboxes = np.array([
-            # albumentationsのために最初はPASCAL VOC形式の[x0, y0, x1, y1]をピクセル単位で
+            # albumentationsにはASCAL VOC形式の[x0, y0, x1, y1]をピクセル単位で入力する
             [left, top, right, bottom,],
         ])
 
         labels = np.array([
-            # 0はラベルなしで無視される。検出対象は1<=である必要ある
+            # 検出対象はid>=1である必要あり。0はラベルなしとして無視される。
             1,
         ])
 
@@ -69,7 +69,6 @@ class CircleDataset(Dataset):
             bboxes=bboxes,
             labels=labels,
         )
-        # まとめてndarrayにキャスト
         x = result['image']
         bboxes = torch.FloatTensor(result['bboxes'])
         labels = torch.FloatTensor(result['labels'])
@@ -92,19 +91,12 @@ class CircleDataset(Dataset):
         }
         return x, y
 
-
-def tensor_to_pil(tensor):
-    a = tensor.min()
-    b = tensor.max()
-    img = (tensor - a) / (b - a)
-    return to_pil_image(img)
-
 if __name__ == '__main__':
     # draw_bounding_boxesはxyxy形式
-    ds = CircleDataset(use_yxyx=False)
+    ds = CircleDataset(use_yxyx=False, normalized=False)
     for (x, y) in ds:
-        tensor_to_pil(x).save(f'example_x.png')
+        to_pil_image(x).save(f'example_x.png')
         t = draw_bounding_boxes(image=x, boxes=y['bbox'], labels=[str(v.item()) for v in y['cls']])
-        img = tensor_to_pil(t)
+        img = to_pil_image(t)
         img.save(f'example_xy.png')
         break
