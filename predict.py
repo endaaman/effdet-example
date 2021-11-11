@@ -22,9 +22,11 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if args.checkpoint:
     checkpoint = torch.load(args.checkpoint)
     network = checkpoint['args'].network
+    image_size = checkpoint['image_size']
 else:
     print('using default weights')
     network = 'd0'
+    image_size = 512
 
 # モデル準備
 cfg = get_efficientdet_config(f'tf_efficientdet_{network}')
@@ -37,9 +39,10 @@ bench = DetBenchPredict(model).to(device)
 img = Image.open(args.src)
 original_size = (img.width, img.height)
 transform = transforms.Compose([
+    transforms.Resize((image_size, image_size)),
     transforms.ToTensor(),
 ])
-input_tensor = transform(img.resize(cfg.image_size))
+input_tensor = transform(img)
 # 先頭にバッチのインデックスをつける
 input_tensor = input_tensor[None, :] # CHW -> BCHW
 
@@ -54,14 +57,13 @@ output_tensor = output_tensor.detach().cpu().type(torch.long)
 # 一枚だけ入力しているので最初だけ取得
 bboxes = output_tensor[0]
 
-
 # フォントは各自適当なものを使うこと
 font = ImageFont.truetype('/usr/share/fonts/ubuntu/Ubuntu-R.ttf', size=16)
 
 draw = ImageDraw.Draw(img)
-scale = np.array(original_size) / np.array(cfg.image_size) # [w, h]
-# [x0, y0, x1, y1] に掛けやすい形に変形
-scale = np.tile(scale, 2) # [w, h, w, h]
+# original_size は int[2] のタプルなので *2 で int[4] になる
+# [x0, y0, x1, y1] に掛けやすい形に変形しておく
+scale = np.array(original_size * 2) / image_size # [w, h, w, h]
 for bbox in bboxes:
     label = bbox[5].item()
     # 元の画像サイズにスケールし直して四捨五入

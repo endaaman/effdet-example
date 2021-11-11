@@ -21,19 +21,20 @@ parser.add_argument('--lr', type=float, default=0.01)
 args = parser.parse_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# effdetはyxyxで受け取る
-dataset = CircleDataset(use_yxyx=True)
-loader = DataLoader(
-    dataset,
-    batch_size=args.batch_size,
-    num_workers=args.workers,
-)
-
+# モデル準備
 cfg = get_efficientdet_config(f'tf_efficientdet_{args.network}')
 # 識別する対象は一種類
 cfg.num_classes = 1
 model = EfficientDet(cfg)
 bench = DetBenchTrain(model).to(device)
+
+# effdetはyxyxで受け取る。image_sizeはいずれのモデルの正方形なのでscalerで保持
+dataset = CircleDataset(use_yxyx=True, image_size=cfg.image_size[0])
+loader = DataLoader(
+    dataset,
+    batch_size=args.batch_size,
+    num_workers=args.workers,
+)
 
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
@@ -74,6 +75,7 @@ for epoch in range(1, args.epoch + 1):
         state = {
             'epoch': epoch,
             'args': args,
+            'image_size': cfg.image_size[0],
              # multi GPUは考慮しない
             'state_dict': model.state_dict(),
         }
