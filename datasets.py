@@ -10,6 +10,27 @@ from albumentations.pytorch.transforms import ToTensorV2
 np.random.seed(42)
 
 
+def generate_dummy_pair(
+        image_size=512,
+        target_radius=(0, 128),
+        bg_color=(255, 0, 0),
+        fg_color=(0, 0, 0)):
+    img = Image.new('RGB', (image_size, image_size), bg_color)
+
+    r = np.random.randint(*target_radius)
+    x = np.random.randint(0, 512)
+    y = np.random.randint(0, 512)
+
+    rect = (x - r,
+            y - r,
+            x + r,
+            y + r)
+    draw = ImageDraw.Draw(img)
+    draw.ellipse(rect, fill=fg_color)
+
+    return img, rect
+
+
 class CircleDataset(Dataset):
     def __init__(self, use_yxyx=True, image_size=512, bg=(0, 0, 0), fg=(255, 0, 0), normalized=True):
         self.use_yxyx = use_yxyx
@@ -42,21 +63,13 @@ class CircleDataset(Dataset):
         return 1000 # 1epochあたりの枚数。自動生成なので適当
 
     def __getitem__(self, idx):
-        img = Image.new('RGB', (512, 512), self.bg)
-
-        size = np.random.randint(0, 256)
-        left = np.random.randint(0, 256)
-        top = np.random.randint(0, 256)
-
-        right = left + size
-        bottom = top + size
-        draw = ImageDraw.Draw(img)
-        draw.ellipse((left, top, right, bottom), fill=self.fg)
-
+        img, rect = generate_dummy_pair()
         # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
+
+        # rect は (left, top, right, bottom) の tuple
         bboxes = np.array([
-            # albumentationsにはASCAL VOC形式の[x0, y0, x1, y1]をピクセル単位で入力する
-            [left, top, right, bottom,],
+            # albumentationsにはPASCAL VOC形式の[[left, top, right, bottom]]をピクセル単位で入力する
+            rect,
         ])
 
         labels = np.array([
@@ -73,7 +86,7 @@ class CircleDataset(Dataset):
         bboxes = torch.FloatTensor(result['bboxes'])
         labels = torch.FloatTensor(result['labels'])
 
-        # albumentationsのrandom cropでbboxが範囲外に出るとラベルのサイズがなくなるのでゼロ埋めしておく
+        # albumentationsのrandom cropでbboxが範囲外に出るとラベルのサイズがなくなるのでdummyデータで埋めておく
         # 複数のbboxを扱う場合は、足りない要素数分emptyなbboxとclsで補う処理が必要
         if bboxes.shape[0] == 0:
             bboxes = torch.zeros([1, 4], dtype=bboxes.dtype)
