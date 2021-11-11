@@ -34,7 +34,7 @@ class CircleDataset(Dataset):
             ], p=0.3),
             A.HueSaturationValue(p=0.3),
             # 可視化するとき正規化されるとnoisyなのでトグれるようにする
-            A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]) if normalized else None,
+            # A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]) if normalized else None,
             ToTensorV2(),
         ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
 
