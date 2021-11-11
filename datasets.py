@@ -10,26 +10,40 @@ from albumentations.pytorch.transforms import ToTensorV2
 np.random.seed(42)
 
 
-def generate_dummy_pair(
-        image_size=512,
-        target_radius=(0, 128),
-        bg_color=(255, 0, 0),
-        fg_color=(0, 0, 0)):
-    img = Image.new('RGB', (image_size, image_size), bg_color)
+# def generate_dummy_pair(
+#         image_size=512,
+#         target_radius=(16, 128),
+#         bg_color=(255, 0, 0),
+#         fg_color=(0, 0, 0)):
+#     img = Image.new('RGB', (image_size, image_size), bg_color)
+#     r = np.random.randint(*target_radius)
+#     m = 200
+#     pos = (m, 512-m)
+#     x = np.random.randint(*pos)
+#     y = np.random.randint(*pos)
+#
+#     rect = np.array([x - r,
+#                      y - r,
+#                      x + r,
+#                      y + r]).clip(0, 255)
+#     rect = tuple(rect)
+#     draw = ImageDraw.Draw(img)
+#     draw.ellipse(rect, fill=fg_color)
+#     return img, rect
 
-    r = np.random.randint(*target_radius)
-    x = np.random.randint(0, 512)
-    y = np.random.randint(0, 512)
+def generate_dummy_pair(bg=(0, 0, 0), fg=(255, 0, 0)):
+    img = Image.new('RGB', (512, 512), bg)
 
-    rect = (x - r,
-            y - r,
-            x + r,
-            y + r)
+    size = np.random.randint(0, 256)
+    left = np.random.randint(0, 256)
+    top = np.random.randint(0, 256)
+
+    right = left + size
+    bottom = top + size
+    rect = (left, top, right, bottom)
     draw = ImageDraw.Draw(img)
-    draw.ellipse(rect, fill=fg_color)
-
+    draw.ellipse(rect, fill=fg)
     return img, rect
-
 
 class CircleDataset(Dataset):
     def __init__(self, use_yxyx=True, image_size=512, bg=(0, 0, 0), fg=(255, 0, 0), normalized=True):
@@ -55,21 +69,29 @@ class CircleDataset(Dataset):
             ], p=0.3),
             A.HueSaturationValue(p=0.3),
             # 可視化するとき正規化されるとnoisyなのでトグれるようにする
-            # A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]) if normalized else None,
+            A.Normalize(mean=[0.2, 0.1, 0.1], std=[0.2, 0.1, 0.1]) if normalized else None,
             ToTensorV2(),
         ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['labels']))
 
     def __len__(self):
-        return 1000 # 1epochあたりの枚数。自動生成なので適当
+        return 200 # 1epochあたりの枚数。自動生成なので適当
 
     def __getitem__(self, idx):
-        img, rect = generate_dummy_pair()
-        # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
+        img = Image.new('RGB', (512, 512), self.bg)
 
-        # rect は (left, top, right, bottom) の tuple
+        size = np.random.randint(1, 256)
+        left = np.random.randint(0, 256)
+        top = np.random.randint(0, 256)
+
+        right = left + size
+        bottom = top + size
+        draw = ImageDraw.Draw(img)
+        draw.ellipse((left, top, right, bottom), fill=self.fg)
+
+        # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
         bboxes = np.array([
-            # albumentationsにはPASCAL VOC形式の[[left, top, right, bottom]]をピクセル単位で入力する
-            rect,
+            # albumentationsにはASCAL VOC形式の[x0, y0, x1, y1]をピクセル単位で入力する
+            [left, top, right, bottom,],
         ])
 
         labels = np.array([
@@ -86,12 +108,15 @@ class CircleDataset(Dataset):
         bboxes = torch.FloatTensor(result['bboxes'])
         labels = torch.FloatTensor(result['labels'])
 
-        # albumentationsのrandom cropでbboxが範囲外に出るとラベルのサイズがなくなるのでdummyデータで埋めておく
+        # albumentationsのrandom cropでbboxが範囲外に出るとラベルのサイズがなくなるのでゼロ埋めしておく
         # 複数のbboxを扱う場合は、足りない要素数分emptyなbboxとclsで補う処理が必要
         if bboxes.shape[0] == 0:
             bboxes = torch.zeros([1, 4], dtype=bboxes.dtype)
         if labels.shape[0] < 1:
-            labels = torch.zeros([1, 1], dtype=labels.dtype)
+            labels = torch.zeros([1], dtype=labels.dtype)
+
+        print(bboxes.shape)
+        print(labels.shape)
 
         # effdetはデフォルトではyxyxで受け取るので、インデックスを入れ替える
         if self.use_yxyx:
