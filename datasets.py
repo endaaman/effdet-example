@@ -77,21 +77,20 @@ class CircleDataset(Dataset):
         return 200 # 1epochあたりの枚数。自動生成なので適当
 
     def __getitem__(self, idx):
-        img = Image.new('RGB', (512, 512), self.bg)
+        # img = Image.new('RGB', (512, 512), self.bg)
+        # size = np.random.randint(1, 256)
+        # left = np.random.randint(0, 256)
+        # top = np.random.randint(0, 256)
+        # right = left + size
+        # bottom = top + size
+        # draw = ImageDraw.Draw(img)
 
-        size = np.random.randint(1, 256)
-        left = np.random.randint(0, 256)
-        top = np.random.randint(0, 256)
-
-        right = left + size
-        bottom = top + size
-        draw = ImageDraw.Draw(img)
-        draw.ellipse((left, top, right, bottom), fill=self.fg)
+        img, rect = generate_dummy_pair(self.bg, self.fg)
 
         # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
         bboxes = np.array([
             # albumentationsにはASCAL VOC形式の[x0, y0, x1, y1]をピクセル単位で入力する
-            [left, top, right, bottom,],
+            rect,
         ])
 
         labels = np.array([
@@ -115,12 +114,12 @@ class CircleDataset(Dataset):
         if labels.shape[0] < 1:
             labels = torch.zeros([1], dtype=labels.dtype)
 
-        print(bboxes.shape)
-        print(labels.shape)
-
         # effdetはデフォルトではyxyxで受け取るので、インデックスを入れ替える
         if self.use_yxyx:
             bboxes = bboxes[:, [1, 0, 3, 2]]
+
+        assert bboxes.shape == (1, 4)
+        assert labels.shape == (1, )
 
         # effdetのtargetは以下の形式
         y = {
@@ -132,9 +131,11 @@ class CircleDataset(Dataset):
 if __name__ == '__main__':
     # draw_bounding_boxesはxyxy形式
     ds = CircleDataset(use_yxyx=False, normalized=False)
-    for (x, y) in ds:
-        to_pil_image(x).save(f'example_x.png')
+    for i, (x, y) in enumerate(ds):
+        # to_pil_image(x).save(f'tmp/{i}_x.png')
         t = draw_bounding_boxes(image=x, boxes=y['bbox'], labels=[str(v.item()) for v in y['cls']])
         img = to_pil_image(t)
-        img.save(f'example_xy.png')
-        break
+        img.save(f'out/tmp/{i}_xy.png')
+        if i > 100:
+            break
+
