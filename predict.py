@@ -11,7 +11,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from effdet import EfficientDet, DetBenchPredict, get_efficientdet_config
 
-from datasets import CircleDataset
+from datasets import CircleDataset, draw_bbox
 
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument('-c', '--checkpoint', type=str)
@@ -60,16 +60,13 @@ bboxes = output_tensor[0]
 # フォントは各自適当なものを使うこと
 font = ImageFont.truetype('/usr/share/fonts/ubuntu/Ubuntu-R.ttf', size=16)
 
-draw = ImageDraw.Draw(img)
 # original_size は int[2] のタプルなので *2 で int[4] になる
 # [x0, y0, x1, y1] に掛けやすい形に変形しておく
 scale = np.array(original_size * 2) / image_size # [w, h, w, h]
 for bbox in bboxes:
-    label = bbox[5].item()
     # 元の画像サイズにスケールし直して四捨五入
-    bbox = np.rint(bbox[:4].numpy() * scale).astype(np.int64)
-    draw.text((bbox[0], bbox[1]), f'{label}', font=font, fill='yellow')
-    draw.rectangle(((bbox[0], bbox[1]), (bbox[2], bbox[3])), outline='yellow', width=1)
+    rect = np.rint(bbox[:4].numpy() * scale).astype(np.int64)
+    draw_bbox(img, rect, str(bbox[5].item()), font=font)
 
 os.makedirs('out', exist_ok=True)
 p = os.path.join('out', os.path.basename(args.src))

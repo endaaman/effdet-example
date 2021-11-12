@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from torch.utils.data import Dataset
 from torchvision.utils import draw_bounding_boxes
 from torchvision.transforms.functional import to_pil_image
@@ -30,6 +30,15 @@ np.random.seed(42)
 #     draw = ImageDraw.Draw(img)
 #     draw.ellipse(rect, fill=fg_color)
 #     return img, rect
+
+
+def draw_bbox(img, rect, text=None, color='yellow', font=None):
+    draw = ImageDraw.Draw(img)
+    draw.rectangle(((rect[0], rect[1]), (rect[2], rect[3])), outline=color, width=1)
+    if not font:
+        font = ImageFont.truetype('/usr/share/fonts/ubuntu/Ubuntu-R.ttf', size=16)
+    if text:
+        draw.text((rect[0], rect[1]), text, font=font, fill=color)
 
 def generate_dummy_pair(bg=(0, 0, 0), fg=(255, 0, 0)):
     img = Image.new('RGB', (512, 512), bg)
@@ -61,7 +70,7 @@ class CircleDataset(Dataset):
                 A.MedianBlur(blur_limit=3, p=0.1),
                 A.Blur(blur_limit=3, p=0.1),
             ], p=0.2),
-            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=5, p=0.5),
+            # A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=5, p=0.5),
             A.OneOf([
                 A.CLAHE(clip_limit=2),
                 A.Emboss(),
@@ -132,10 +141,11 @@ if __name__ == '__main__':
     # draw_bounding_boxesはxyxy形式
     ds = CircleDataset(use_yxyx=False, normalized=False)
     for i, (x, y) in enumerate(ds):
-        # to_pil_image(x).save(f'tmp/{i}_x.png')
-        t = draw_bounding_boxes(image=x, boxes=y['bbox'], labels=[str(v.item()) for v in y['cls']])
-        img = to_pil_image(t)
-        img.save(f'out/tmp/{i}_xy.png')
-        if i > 100:
-            break
+        img = to_pil_image(x)
+        img.save(f'out/tmp/example_x.png')
+        draw_bbox(img, y['bbox'].numpy().astype(np.int64)[0], str(y['cls'][0].item()))
+        img.save(f'out/tmp/example_xy.png')
+        # if i > 100:
+        #     break
+        break
 
