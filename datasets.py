@@ -10,42 +10,27 @@ from albumentations.pytorch.transforms import ToTensorV2
 np.random.seed(42)
 
 
-# def generate_dummy_pair(
-#         image_size=512,
-#         target_radius=(16, 128),
-#         bg_color=(255, 0, 0),
-#         fg_color=(0, 0, 0)):
-#     img = Image.new('RGB', (image_size, image_size), bg_color)
-#     r = np.random.randint(*target_radius)
-#     m = 200
-#     pos = (m, 512-m)
-#     x = np.random.randint(*pos)
-#     y = np.random.randint(*pos)
-#
-#     rect = np.array([x - r,
-#                      y - r,
-#                      x + r,
-#                      y + r]).clip(0, 255)
-#     rect = tuple(rect)
-#     draw = ImageDraw.Draw(img)
-#     draw.ellipse(rect, fill=fg_color)
-#     return img, rect
-
-
-def draw_bbox(img, rect, text=None, color='yellow', font=None):
+def draw_bbox(img, rect, text=None, font=None, color='yellow'):
+    ''' draw_bbox
+        img: Image
+        rect: list|tuple|np.ndarray|torch.Tensor
+    '''
+    rect = [int(v) for v in rect]
     draw = ImageDraw.Draw(img)
     draw.rectangle(((rect[0], rect[1]), (rect[2], rect[3])), outline=color, width=1)
-    if not font:
-        font = ImageFont.truetype('/usr/share/fonts/ubuntu/Ubuntu-R.ttf', size=16)
     if text:
-        draw.text((rect[0], rect[1]), text, font=font, fill=color)
+        if not font:
+            font = ImageFont.truetype('/usr/share/fonts/ubuntu/Ubuntu-R.ttf', size=16)
+        draw.text((rect[0], rect[1]), str(text), font=font, fill=color)
 
-def generate_dummy_pair(bg=(0, 0, 0), fg=(255, 0, 0)):
-    img = Image.new('RGB', (512, 512), bg)
+def generate_dummy_pair(image_size):
+    bg = (0, 0, 0)
+    fg = (255, 0, 0)
+    img = Image.new('RGB', (image_size, image_size), bg)
 
-    size = np.random.randint(0, 256)
-    left = np.random.randint(0, 256)
-    top = np.random.randint(0, 256)
+    size = np.random.randint(10, image_size//2)
+    left = np.random.randint(0, image_size//2)
+    top = np.random.randint(0, image_size//2)
 
     right = left + size
     bottom = top + size
@@ -55,10 +40,8 @@ def generate_dummy_pair(bg=(0, 0, 0), fg=(255, 0, 0)):
     return img, rect
 
 class CircleDataset(Dataset):
-    def __init__(self, use_yxyx=True, image_size=512, bg=(0, 0, 0), fg=(255, 0, 0), normalized=True):
+    def __init__(self, image_size=512, use_yxyx=True, normalized=True):
         self.use_yxyx = use_yxyx
-        self.bg = bg
-        self.fg = fg
         self.image_size = image_size
 
         # 適当なaugmentaion
@@ -70,7 +53,7 @@ class CircleDataset(Dataset):
                 A.MedianBlur(blur_limit=3, p=0.1),
                 A.Blur(blur_limit=3, p=0.1),
             ], p=0.2),
-            # A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=5, p=0.5),
+            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=5, p=0.5),
             A.OneOf([
                 A.CLAHE(clip_limit=2),
                 A.Emboss(),
@@ -94,7 +77,7 @@ class CircleDataset(Dataset):
         # bottom = top + size
         # draw = ImageDraw.Draw(img)
 
-        img, rect = generate_dummy_pair(self.bg, self.fg)
+        img, rect = generate_dummy_pair(self.image_size)
 
         # shapeはbox_count x box_coords (N x 4)。円は常に一つなので、今回は画像一枚に対して(1 x 4)
         bboxes = np.array([
@@ -138,14 +121,7 @@ class CircleDataset(Dataset):
         return x, y
 
 if __name__ == '__main__':
-    # draw_bounding_boxesはxyxy形式
-    ds = CircleDataset(use_yxyx=False, normalized=False)
-    for i, (x, y) in enumerate(ds):
-        img = to_pil_image(x)
-        img.save(f'out/tmp/example_x.png')
-        draw_bbox(img, y['bbox'].numpy().astype(np.int64)[0], str(y['cls'][0].item()))
-        img.save(f'out/tmp/example_xy.png')
-        # if i > 100:
-        #     break
-        break
-
+    img, rect = generate_dummy_pair(512)
+    img.save(f'out/example.png')
+    draw_bbox(img, rect)
+    img.save(f'out/example_gt.png')
